@@ -1,0 +1,120 @@
+**Conversational Retrieval Agent
+
+This project implements a conversational retrieval agent using the Hugging Face Transformers library and Langchain. The agent retrieves relevant documents based on user prompts and generates contextual responses using a pre-trained language model.
+
+#Features
+
+- Retrieve relevant documents based on user input
+- Generate responses using the Hugging Face chat model
+- Truncate and manage context to fit model input limitations
+- Verbose mode for debugging and inspection of retrieved documents and responses
+
+##Requirements
+
+To run this project, you'll need Python 3.7 or higher. Install the required packages with:
+
+```bash
+pip install langchain langchain_community langchain_openai faiss-cpu pypdf transformers sentence-transformers
+Usage
+Import Libraries: Ensure you have the necessary libraries imported in your Python environment.
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+from transformers import AutoModelForCausalLM, AutoTokenizer
+Load Your PDF Document:
+
+
+pdfloader = PyPDFLoader("path/to/your/document.pdf")
+mydocuments = pdfloader.load()
+Create Text Splitter and Vector Store:
+
+
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+texts = text_splitter.split_documents(mydocuments)
+
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+db = FAISS.from_documents(texts, embeddings)
+Define the Chat Model:
+
+
+model_name = "facebook/blenderbot-400M-distill"
+chat_model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+Define the Hugging Face Chat Function:
+
+
+def huggingface_chat(prompt):
+    inputs = tokenizer(prompt, truncation=True, max_length=128, return_tensors="pt")
+    output = chat_model.generate(**inputs, max_new_tokens=100)
+    response_text = tokenizer.decode(output[0], skip_special_tokens=True)
+
+    print(f"Generated Prompt: {prompt}")  # Debugging line
+    print(f"Model Output: {output}")       # Debugging line
+    print(f"Response Text: {response_text}")  # Debugging line
+
+    return response_text
+##Create the Conversational Retrieval Agent:
+
+def create_conversational_retrieval_agent_hf(retriever, verbose=False):
+    def agent(prompt):
+        # Retrieve relevant documents
+        documents = retriever.get_relevant_documents(prompt)
+
+        # Limit the number of documents and characters per document
+        max_docs = 3
+        max_chars_per_doc = 500
+        context = ""
+        count = 0
+        for doc in documents:
+            if count >= max_docs:
+                break
+            context += doc.page_content[:max_chars_per_doc] + "\n"
+            count += 1
+
+        # Prepare the full prompt
+        full_prompt = f"Context: {context}\nUser: {prompt}\nAssistant:"
+
+        # Check token length and truncate if necessary
+        total_length = len(tokenizer(full_prompt)["input_ids"])
+        max_length = 128  # Model's max input length
+
+        if total_length > max_length:
+            while total_length > max_length:
+                context = "\n".join(context.split("\n")[1:])  # Remove the first line
+                total_length = len(tokenizer(f"Context: {context}\nUser: {prompt}\nAssistant:")["input_ids"])
+
+        # Debugging prompt
+        print(f"Final Full Prompt Sent to Model: {full_prompt}")  # Debugging line
+        
+        # Generate response
+        response = huggingface_chat(full_prompt)
+
+        if verbose:
+            print(f"\nRetrieved Documents:\n{context}\n\nModel Response:\n{response}")
+        
+        return response
+
+    return agent
+
+
+retrieval_agent = create_conversational_retrieval_agent_hf(db, verbose=True)
+response = retrieval_agent("Your question here")
+print("Chatbot Response:", response)
+Contributing
+Feel free to submit issues, suggestions, or pull requests. Contributions are welcome!
+
+
+
+
+### Instructions for Customization
+- Replace `"path/to/your/document.pdf"` with the actual path to your PDF file.
+- Update any specific sections, such as features or contributing guidelines, based on your project's context.
+
+Once you've customized it to your liking, save it as `README.md` and upload it to your GitHub repository. If you have any more requests or need further assistance, feel free to ask!
+
+
+
+
+
